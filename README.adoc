@@ -13,7 +13,7 @@ http://localhost:8080/oauth/authorize?response_type=code&client_id=foo&redirect_
 ****
 
 Client의 접근을 허가 할 것인지 여부를 묻는다.
-image::images/image.png[]
+image::approval.jpg[]
 위 화면에서 Approve체크 후 하단에 Authorize버튼을 클릭하면 아래의 주소로 리다이렉트 되면서 브라우저 화면에서 curl 명령어가 보일 것이다.
 
 ****
@@ -95,14 +95,15 @@ $ curl -F "grant_type=client_credentials" -F "scope=read" "http://foo:bar@localh
 ----
 $ curl -F "grant_type=refresh_token" -F "scope=read" -F "refresh_token=발급된 Refresh Token" "http://foo:bar@localhost:8080/oauth/token"
 ----
-결과 값
+결과 값 
 [source,json]
 ----
 {
   "access_token":"176f129c-f0ad-49b3-9d50-e1c3782f911d",
   "token_type":"bearer",
   "refresh_token":"778b8e13-fb47-4589-91ef-38d872d17e05",
-  "expires_in":43199,"scope":"read"
+  "expires_in":43199,
+  "scope":"read"
 }
 ----
 == 2. Access Token을 사용하여 API에 접근 테스트
@@ -111,7 +112,7 @@ $ curl -F "grant_type=refresh_token" -F "scope=read" -F "refresh_token=발급된
 
 [source,sh]
 ----
-$ curl -H "Authorization: Bearer 발급된 AccessToken" "http://localhost:8080/members%22[http://localhost:8080/members"
+$ curl -H "Authorization: Bearer 발급된 AccessToken" "http://localhost:8080/members"
 ----
 e.g. 
 [source,sh]
