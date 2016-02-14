@@ -13,7 +13,9 @@ http://localhost:8080/oauth/authorize?response_type=code&client_id=foo&redirect_
 ****
 
 Client의 접근을 허가 할 것인지 여부를 묻는다.
-image::https://raw.githubusercontent.com/sbcoba/spring-boot-oauth2-sample/master/approval.jpg[]
+
+image::https://raw.githubusercontent.com/sbcoba/spring-boot-oauth2-sample/master/approval.jpg[width=50%]
+
 위 화면에서 Approve체크 후 하단에 Authorize버튼을 클릭하면 아래의 주소로 리다이렉트 되면서 브라우저 화면에서 curl 명령어가 보일 것이다.
 
 ****
