@@ -1,0 +1,124 @@
+= Spring Boot OAuth2 서버의 기초
+
+== 1. OAuth2 Access Token 발급 방법
+
+=== 1. 권한 코드 방식 (Authorization Code flow)
+보통 서버 사이트 웹에서 인증받을 때 가장 많이 쓰는 방식으로 기본적으로 지원하고 있는 방식이다.
+Access Token을 받기 위한 테스트가 다른 방식에 비해 복잡하다.
+(따로 인증 관련 요청 페이지 부분을 생성했다.)
+먼저 바로 아래의 주소로 브라우저에서 호출한다.
+
+****
+http://localhost:8080/oauth/authorize?response_type=code&client_id=foo&redirect_uri=http://localhost:8080/test/authorization-code&scope=read
+****
+
+Client의 접근을 허가 할 것인지 여부를 묻는다.
+image::images/image.png[]
+위 화면에서 Approve체크 후 하단에 Authorize버튼을 클릭하면 아래의 주소로 리다이렉트 되면서 브라우저 화면에서 curl 명령어가 보일 것이다.
+
+****
+http://localhost:8080/test/authorization-code?code=생성된코드
+****
+
+[source,sh]
+----
+$ curl -F "grant_type=authorization_code" -F "code=생성된 코드" -F "client_id=foo" -F "scope=read" -F "client_secret=bar" -F "redirect_uri=http://localhost:8080/test/authorization-code" "http://foo:bar@localhost:8080/oauth/token"
+----
+
+브라우저에 나타나 curl 명령어를 복사해서 실행하면 아래의 Access Token정보가 보일 것이다.
+[source,json]
+----
+{
+  "access_token":"1f94c2eb-99bb-412a-bc17-9630b1ae29dc",
+  "token_type":"bearer",
+  "refresh_token":"a4b037b7-f736-4bde-a073-7f88279df9bb",
+  "expires_in":43199,
+  "scope":"read"
+}
+----
+=== 2. 암묵적인 동의 방식 (Implicit Grant flow)
+보통 클라이언트 사이드에서 OAuth2 인증하는 방식이다.
+****
+http://user:test@localhost:8080/oauth/authorize?response_type=token&redirect_uri=http://localhost:8080&client_id=foo&scope=read
+****
+
+위의 주소 형태를 호출하면 redirect_uri에 입력된 주소로 리다이렉트 되면서 기본적으로 해쉬태그에서 파라메터로 Access Token을 전달해준다.
+(암묵적인 동의 방식에는 Refresh Token이 발급되지 않는다.)
+****
+http://localhost:8080/#access_token=엑세스토큰&token_type=bearer&expires_in=43199
+****
+e.g.
+****
+http://localhost:8080/#access_token=9438e940-6d96-4b7f-b961-fc79138226c3&token_type=bearer&expires_in=43199
+****
+
+=== 3. 자원 소유자 비밀번호  (Resource Owner Password Credentials flow)
+자원 소유자 즉 사용자의 아이디(username)와 비밀번호로 Access Token 발급한다.
+
+[source,sh]
+----
+$ curl foo:bar@localhost:8080/oauth/token -d grant_type=password -d client_id=foo -d scope=read -d username=user -d password=test
+----
+결과값
+[source,json]
+----
+{
+  "access_token":"9438e940-6d96-4b7f-b961-fc79138226c3",
+  "token_type":"bearer",
+  "refresh_token":"778b8e13-fb47-4589-91ef-38d872d17e05",
+  "expires_in":41782,
+  "scope":"read"
+}
+----
+=== 4. 클라이언트 인증 플로우 (Client Credentials flow)
+클라이언트가 직접  자신의 정보를 통해 Access Token을 발급한다.
+
+[source,sh]
+----
+$ curl -F "grant_type=client_credentials" -F "scope=read" "http://foo:bar@localhost:8080/oauth/token"
+----
+결과 값 (클라이언트 인증 플로우는 Resfresh_token이 발급 되지 않는다.)
+[source,json]
+----
+{
+  "access_token":"403911b5-47e9-4d4a-a934-56668b10646b",
+  "token_type":"bearer",
+  "expires_in":43199,
+  "scope":"read"
+}
+----
+
+=== 5. Refresh  Token를 통한 Access Token 재발급
+기존에 저장해둔 Refresh Token이  존재할 때 Access Token  재발급받을 필요가 있을 때 사용한다.
+그리고 기존 Access Token은 만료된다.
+[source,sh]
+----
+$ curl -F "grant_type=refresh_token" -F "scope=read" -F "refresh_token=발급된 Refresh Token" "http://foo:bar@localhost:8080/oauth/token"
+----
+결과 값
+[source,json]
+----
+{
+  "access_token":"176f129c-f0ad-49b3-9d50-e1c3782f911d",
+  "token_type":"bearer",
+  "refresh_token":"778b8e13-fb47-4589-91ef-38d872d17e05",
+  "expires_in":43199,"scope":"read"
+}
+----
+== 2. Access Token을 사용하여 API에 접근 테스트
+  
+위에서 여러 가지 방법으로 발급된 Access Token을 사용해서 API를 호출해보자.
+
+[source,sh]
+----
+$ curl -H "Authorization: Bearer 발급된 AccessToken" "http://localhost:8080/members%22[http://localhost:8080/members"
+----
+e.g. 
+[source,sh]
+----
+ 
+$ curl -H "Authorization: Bearer 05e63e85-9614-446a-8904-aa6cc556bb1b" "http://localhost:8080/members"
+----
+
+JSON 정보가 확인되면 OAuth2 인증을 한 후 자원 접근에 성공하였다.
+
