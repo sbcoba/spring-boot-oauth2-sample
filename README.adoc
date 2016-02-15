@@ -12,6 +12,7 @@ Access Token을 받기 위한 테스트가 다른 방식에 비해 복잡하다.
 http://localhost:8080/oauth/authorize?response_type=code&client_id=foo&redirect_uri=http://localhost:8080/test/authorization-code&scope=read
 ****
 
+
 Client의 접근을 허가 할 것인지 여부를 묻는다.
 
 image::approval.jpg[width=50%]
