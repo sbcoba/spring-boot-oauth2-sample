@@ -1,0 +1,28 @@
+# 외부 DB 설정시 아래의 주석을 활성화 시킨 후 관련 DB 설정 정보를 입력한다.
+#spring:
+#  datasource:
+#    url: jdbc:h2:tcp://localhost/~/test;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+#    driverClassName: org.h2.Driver
+#    username: sa
+#    password:
+
+spring.h2.console:
+  enabled: true
+  path: /h2-console
+
+security:
+  user:
+    name: user
+    password: test
+
+  oauth2:
+    client:
+      client-id: foo
+      client-secret: bar
+    authorization:
+      check-token-access: isAuthenticated()
+
+logging.level:
+  org.springframework:
+    security: debug
+    boot: debug
