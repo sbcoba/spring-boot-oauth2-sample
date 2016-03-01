@@ -1,0 +1,195 @@
+== Spring Boot로 만드는 OAuth2 시스템 5
+
+==== OAuth2 서버를 커스터마이징 해보자 (TokenStore 편)
+
+앞서 포스팅에서는 최소한의 코드로 OAuth2 서버를 만들어보았다. 사실 설명은 길었으나 정작 코드가 얼마 없는 것을 보고 많이 실망했을 수도 있겠다. 당연히 테스트 형태로 사용할 수는 있어도 실제로 서버로 사용하기에는 많이 부족한 형태이다.
+
+'''
+
+=== 실제로 사용하기 부족한 이유를 한번 살펴보자.
+
+1. 기본적으로 설정하지 않으면 **인증**, **권한**, **토큰**, **권한 코드, 클라이언트** 등 영속성이 필요한 정보를 메모리에서 관리한다. 그렇기 때문에 두개 이상의 서버를 같이 운영해서 사용할 수 없는 문제가 생긴다.
+(인증과 보안처럼 중요한 서버라면 가용성이 많이 높아야 한다. 최소 두대 이상을 운영할 수 있어야 문제가 발생한 서버가 있더라도 바로 중지되는 사태를 막을 수 있다.)
+2. 인증 형태를 모두 Basic 형태로 하기 때문에 실제로 사용하기에는 부족하다.
+3. 인증서버와 API 서버가 같이 존재하기 때문에 API 서버를 추가하거나 변경할 때 인증서버도 같이  종료되는 문제가 생긴다.
+
+일단 지금 까지 생각나는 부분은 여기까지이다.
+
+참고로  이야기하자면 스프링 부트를 사용한다고 해서 기존 스프링에 비해 성능이 떨어지거나 내장 톰캣을 사용한다고 해서 기존 톰캣보다 성능이 떨어진다거나 하지는 않는다. 스프링 부트 이름 그대로 해주는 부분은 서버가 시작할 시에 설정 부분을 편하게 하는 역할이 대부분이다. 단순히 그냥 스프링을 사용한다고 생각하면 된다. 그래도 느리다고  생각되면 로직 자체가 느리거나 스프링 자체 문제일 것이다.  
+그리고 내장 톰캣은 톰캣 사이트에서 http://tomcat.apache.org/download-80.cgi[공식으로 배포하는 톰캣의 내장할 수 있는 버전]이다.
+(성능상 차이가 없다고 생각하면 된다.)
+
+image::https://t1.daumcdn.net/thumb/R1280x0/?fname=http://t1.daumcdn.net/brunch/service/user/so6/image/qQ4ffCErWBws38maO6DGAEv92rI.jpg[]
+공식으로 배포하는 내장톰캣
+
+'''
+
+첫 번째로 변경해볼 부분은 토큰 (AccessToken, RefreshToken)을 메모리가 아니라 외부에 저장하는 부분을 진행해보자. 
+
+토큰을 저장하는 곳 이름이 **TokenStore**라고 불린다. TokenStore명칭 자체가 토큰을 저장하는 저장소를 의미하기도 하지만 내부에서 사용하는 **인터페이스명을** 지칭하기도 한다.
+
+현재까지 포스팅한 부분까지가 TokenStore는 JVM 내부 메모리를 사용한 저장소를 사용하는 형태이기 때문에 테스트 서버를 재부팅할 때마다 토큰 정보가 초기화된다.   
+그래서 발급된 AccessToken(이하  토큰)을 가지고 API 접근 테스트할 때 조차 많이 불편한 상태이다.
+
+이 토큰 정보 부분을 외부 저장소로 저장하는 작업을 해보자. (즉 다른 TokenStore를 사용해보자.)
+
+'''
+
+=== 스프링 시큐리티 OAuth2의 기본 TokenStore 종류
+****
+1. org.springframework.security.oauth2.provider.token.store.InMemoryTokenStore
+
+- JAVA 내부에서 Map, Queue 구조의 메모리를 사용한 저장소 **(기본)**
+
+2. org.springframework.security.oauth2.provider.token.store.JdbcTokenStore
+
+- JDBC를 사용해서 DB에 저장하는 방식
+
+3. org.springframework.security.oauth2.provider.token.store.JwtTokenStore
+
+- 외부 저장소가 아닌 https://jwt.io/[JWT](Token에 JSON 정보를 인코딩 하여 저장하는 방식)를 이용하는 방식
+
+4. org.springframework.security.oauth2.provider.token.store.redis.RedisTokenStore
+
+- http://www.redis.io/[Redis] ( Key Value 저장소 )에 Token 정보를 저장하는 방식  
+****
+'''
+
+기본적인 설정은 InMemoryTokenStore를 사용하기 때문에 서버가 리붓되는 동시에 데이터가 초기화된다.
+
+그래서 먼저 TokenStore 중 가장 익숙한 DB를 이용한 JdbcTokenStore를 이용해서 토큰을 저장해 보는 예제를 해보려고 한다.
+
+기존에 H2 DB를 사용하고 있기 때문에 H2 DB를 사용한 예제를 만들어 보려고 한다. 물론 다른 DB를 사용할 때에도 해야 하는 작업에 큰 차이는 나지 않지만 관련 DBMS 설치나 세팅 등 접속하기 전 사전작업을 설명해야 하기 때문에 제외하겠다. (DB를 변경시에도 [underline]#칼럼명만 바뀌지 않으면# 비교적 쉽게 바꿀 수 있다.)
+
+'''
+
+== JdbcTokenStore를 구현하기 위한 사전 준비사항
+
+=== 1. OAuth2 토큰을 저장하기 위한 DB 스키마 생성
+
+다행히 스프링 시큐리티 OAuth 프로젝트에서 스키마를 제공하고 있다. (https://github.com/spring-projects/spring-security-oauth/blob/master/spring-security-oauth2/src/test/resources/schema.sql[DB 스키마 링크])
+
+단 H2 DB의 스키마 형태만 제공하기 때문에 만약 Mysql, 오라클 등 다른 DB를 사용할 때에는 그 DB에 맞도록 적절하게 스키마를 변경해야 할 것이다.( 대신 칼럼명을 변경하면 귀찮아진다. )
+
+위의 스키마 데이터를 복사하여 application.properties 와 같은 경로인 "resources/" 디렉터리 아래에**schema.sql** 파일을 생성시켜 스키마를 붙여 넣기 한다.   
+("**schema.sql" **파일명과 동일하게 기술해야 따로 설정 없이 관련 서버 시작 시 자동으로 ddl쿼리를 실행한다.)
+
+'''
+
+=== 2. 내장 H2 DB를  조회하기 위한 웹 콘솔을 접속하기 위한 세팅
+
+H2 DB에 토큰이  저장되는지 스키마가 생성되었는지 데이터 확인할 수 있는 내장 H2 DB의 웹 콘솔을  활성화시켜보자. (기본적으로는 비활성화)
+
+스프링 부트 1.3 이후부터는 아래와 같이 설정만 해도 바로 H2 console에 접속 가능하다.
+[source,properties]
+----
+# resources/application.properties  
+spring.h2.console.enabled=true  
+spring.h2.console.path=/h2-console
+----
+현재 설명하는 예제는 스프링 부트 1.3 이후 기준이기 때문에 위와 같은 설정만 하면 되지만 그 이전 버전의 스프링 부트에서는 h2 웹 콘솔을 보기 위해서는 http://java.ihoney.pe.kr/403[허니몬님 블로그]에 설명이 잘되어 있다.
+
+웹 콘솔 활성화 설정이 완료 후 서버를 시작하여 http://localhost:8080/h2-console[http://localhost:8080/h2-console] 주소에 접속해본다.
+
+image::https://t2.daumcdn.net/thumb/R1280x0/?fname=http://t2.daumcdn.net/brunch/service/user/so6/image/kP0XaRMtDgsL8tPdthjW51T-lDk.jpg[]
+웹 콘솔에 접근하면 위와 같은 화면이 나온다.
+위와 같은 화면에 나왔을 때 "JDBC URL" 부분을 [underline]#**jdbc:h2:mem:testdb**#로 **반드시 **바꿔줘야 한다. 이 값이 스프링 부트 안에서 H2 데이터 소스에 접근할 수 있는 (다른 설정을 해주지 않았다면) 기본 접속 정보이다. 
+
+스프링 시큐리티를 사용하고 있기 때문에 헤더 부분이 충돌 나서 화면이 보이지 않을 시에는 아래와 같은 설정 정보를 추가해준다.
+
+https://github.com/sbcoba/spring-boot-oauth2-sample/blob/master/src/main/java/com/example/DemoApplication.java[DemoApplication.java]  
+[source,java]
+----
+@Override  
+public void configure(HttpSecurity http) throws Exception {  
+   http.headers().frameOptions().disable();  
+   ...  
+}
+----
+'''
+
+== JdbcTokenStore 설정
+
+앞에서 언급한 설정 부분이 문제가 없이 되었다면 다음과 아래와 같은 설정만  추가해주면 끝이다.
+
+https://github.com/sbcoba/spring-boot-oauth2-sample/blob/master/src/main/java/com/example/DemoApplication.java[DemoApplication.java]  
+[source,java]
+----
+@Bean  
+public TokenStore JdbcTokenStore(DataSource dataSource) {  
+   return new JdbcTokenStore(dataSource);  
+}
+----
+이 부분만  추가되면 DB에 토큰을 저장할 준비가 완료되었다.   
+(너무 쉽게 설정되어 허무할지도 모르지만 이미 지원되고 있는 형태이기 때문에 쉽게 가능하다.)
+
+이제 잘되는지 테스트를 해보자.
+
+'''
+
+== 테스트
+
+테스트 시나리오 아래와 같이 단순하다.
+
+1.  Access Token이  발급해보고 DB를 확인해서 들어갔는지 확인
+
+2. 발급된 Access Token으로 인증이 되는지 확인
+
+Access Token 발급은 이전 포스팅에서 나열한 것 중 가장 단순한 자원 소유자 비밀번호 형태로 하겠다.
+[source,sh]
+----
+$ curl foo:bar@localhost:8080/oauth/token -d grant_type=password -d client_id=foo -d scope=read -d username=user -d password=test
+----
+실행시켜 본다.
+[source,json]
+----
+{  
+  "access_token":"a870ff1f-4c07-4816-b221-73270326ec25",  
+  "token_type":"bearer",  
+  "expires_in":43199,  
+  "scope":"read"  
+}
+----
+자 Access Token을  발급받았다.
+
+DB에 값이 들어갔는지 확인해보겠다. 기본 테이블명은  "OAUTH_ACCESS_TOKEN"이다.
+
+image::https://t3.daumcdn.net/thumb/R1280x0/?fname=http://t3.daumcdn.net/brunch/service/user/so6/image/nbBgb3MUlHuF4x54S6v4xmjWZBk.jpg[]
+OAUTH_ACCESS_TOKEN 테이블을 조회 해본다.
+위와 같이 쿼리 하면 아래에 토큰이  조회된다.
+
+AccessToken 값 자체에  해당하는 값이 TOKEN_ID 칼럼이다. 하지만 보이는 값이 다른 이유는 AccessToken 자체도 중요한 값이기 때문에  패스워드처럼 인코딩 해서 보관하기 때문에 그렇다.   
+참고로 JdbcTokenStore 클래스의 소스를 살펴보면 MD5 알고리즘을 사용해서 내부에서 인코딩 한다.
+
+이러한 이유로 AccessToken 값이 일치하지 않는 이유에 대해 특별히 신경을 안 써도 된다.
+
+자 이제 발급받은 AccessToken으로 API를  조회해보자.
+[source,sh]
+----
+$ curl -H "Authorization: Bearer a870ff1f-4c07-4816-b221-73270326ec25" "http://localhost:8080/members"
+----
+호출해보니 API가 제대로  조회되는 것을 확인  완료하였다.
+
+그러면 저 DB값을 통해 Access Token이 인증을 받고 있는지 DB에서 데이터를 ** 제거해보자.**
+
+image::https://t4.daumcdn.net/thumb/R1280x0/?fname=http://t4.daumcdn.net/brunch/service/user/so6/image/8WlfFeaPLGNNIbvs96fqQ2ks3es.jpg[]
+DELETE 쿼리를 날려보자.
+[source,sh]
+----
+$ curl -H "Authorization: Bearer a870ff1f-4c07-4816-b221-73270326ec25" "http://localhost:8080/members"
+----
+앞서 잘되던 요청과 동일한 요청을 다시 한번 날려보자.
+[source,json]
+----
+{  
+  "error":"invalid_token",  
+  "error_description":"Invalid access token: a870ff1f-4c07-4816-b221-73270326ec25"  
+}
+----
+예상에 맞게 바로 실패했다.
+
+이로서 비교적 쉽게 DB를 통해 Access Token을 발급하고 사용할 수 있게 되었다.
+
+'''
+
+위의 내용은 미리 알려드린 동일한 https://github.com/sbcoba/spring-boot-oauth2-sample[github]에 갱신되어 있다.

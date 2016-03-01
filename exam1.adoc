@@ -1,0 +1,41 @@
+== Spring Boot로 만드는 OAuth2 시스템 1
+
+==== 스프링 부트와 OAuth2
+
+최근에 웹 또는 앱을 개발하게 되면 가장 많이 접하는 인증 형태가 바로 http://oauth.net/2/[OAuth2] 형태이다. 
+
+소위 말하는 https://developers.facebook.com/products/login[페이스북 인증], https://developers.google.com/youtube/v3/guides/authentication?hl=ko[구글 인증], https://developers.daum.net/services/apis/login[다음 인증], https://developers.naver.com/docs/login/overview[네이버 인증] 등은 대부분 OAuth2 인증을 지원한다.
+
+사실 개발자들은 클라이언트 형태로 위와 같은 인증서비스를 사용해서 자신의 시스템과 연동을 사용한 형태는 많이 접해 보았을 것이다. 
+
+하지만 OAuth2 인증서버를 직접 만들어서 구축한 형태는 사실 개발자에게 해볼 일이 잘 없다.
+
+난이도도 쉽지 않고 국내에서 그런 요구사항이 잘 들어오지도 않는다. 
+
+하지만 어느 정도 규모 있는 회사 및 공공 기관에서 OAuth2 형태로 인증시스템을 구현하게 되면 보통 회사에서 사용하는 인증시스템 ( LDAP 또는 조금 다르지만 SSO 등 ) 보다 연동하여 개발하기가 훨씬 더 수월하고 고 관리하기 하기 쉬워진다. 그리고 다른 인증시스템과 다르게 권한도 가지고있다. 그래서 때문에 한번 구축해서 개발하여 사용해볼 만하다. 
+
+이 포스팅을 하는 이유는 OAuth2서버가 비교적 쉽게 만들 수 있기 때문에 구축하는데 부담을 줄여주는데 조금이라도 기여하기 위해서이다.
+
+그리고 OAuth2 서버를 구축하는 부분을 설명하는 부분을 중점으로 두고 설명하려고 한다.
+
+'''
+
+예전부터 http://projects.spring.io/spring-security/[Spring Security](이하 스프링 시큐리티)의 서브 프로젝트인 http://projects.spring.io/spring-security-oauth/[Spring Security OAuth](이하 스프링 시큐리티 OAuth)를 이용하여 OAuth(1.0a, 2) 인증 시스템(서버와 클라이언트)을  구축할 수 있는 프레임워크를 제공하고 있었다.
+
+하지만 많은 사용자들이 샘플을 봐도 많은 설정 정보가 존재하여 내가 하고 싶은 대로 확장하려 하면 많은 시행착오를 하게 된다.
+
+(사실은 그것 조차 OAuth2 시스템의 구조의 설정에서 많이 단축하고 확장할 수 있도록 만든 형태이다.)
+
+그런 부분에서 처음 접한 많은 개발자들이 장벽을 실감하고 손을 놓게 된다.
+
+(사실 단순하게 만들면 큰  문제없이 개발 할 수 있으나 리얼월드의 요구사항을  따라가려고 할 때 가장 많이 생긴다.)  
+
+'''
+
+최근 스프링 프레임워크(이하 스프링)에서는 http://projects.spring.io/spring-boot/[Spring Boot](이하 스프링 부트)라는 프로젝트가 나오면서 기존의 스프링 설정의 많은 부분을 https://en.wikipedia.org/wiki/Convention_over_configuration[CoC(Convention over configuration,  설정보다 관례]) 형태로 제공되며 변경이 필요한 부분만 속성(Properties) 형태로 작성하여 적은 코딩으로 간단히 개발할 수 있도록 만들어져서 많은 인기를 끌고 있다.  
+(물론 기존 스프링처럼 Bean 형태로 직접 선언하여 확장도 가능하다. )
+
+스프링의 여러 프로젝트 중 하나인 http://projects.spring.io/spring-security-oauth/[스프링 시큐리티 OAuth 프로젝트]가 최근 스프링 추세에 따라 스프링 부트 형태로 최소한의 설정으로 OAuth2 시스템을 개발할 수 있도록 지원하고 있다.  
+(OAuth 1.0a는 스프링 부트에서 지원하지 않는다.)
+
+그래서 여기서는 스프링 부트에서 기본 적으로 지원 형태를 이용하여 OAuth2 서버를 한번 만들어 보려고 한다.

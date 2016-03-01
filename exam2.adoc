@@ -1,0 +1,104 @@
+== Spring Boot로 만드는 OAuth2 시스템 2 
+
+==== 본격적인 개발 하기전에
+
+> Simple is Best
+
+http://projects.spring.io/spring-boot/[Spring Boot](이하 스프링 부트)는 이 문장과 가장 적합한 형태가 아닐까 생각된다.   
+(사실은 보이는 부분만 간단하다.)
+
+그 문장이 맞게 간단하게 스프링 부트로 OAuth2 서버를 만들 준비를 해보자. 
+
+NOTE: 사실 소스 보다 설명이 더 많이 차지할 것 같다. 완성되어 있는 형태에서는 소스는 얼마 없을 것이다.
+
+'''
+
+== 시작하기 전
+
+간단한 API 서버와  그것을 보호하는 OAuth2 서버와  그것을 테스트할 수 있는 OAuth2 클라이언트를 샘플을 개발할 예정이다.
+
+처음에는 간단한 API 서버와 OAuth2 인증서버가 같이 있는 서버로 개발 후 차츰 두 개의 서버로 나누는 형태로 바꿀 생각이다.
+
+Gradle(이하 그레이들)과 Maven(이하 메이븐) 중 어떤 것 기준으로 설명할까  생각했었는데 그래도 아직까지 가장 많이 사용되는 **메이븐 기준**으로 이야기할 예정이다. 
+
+NOTE: 특정 IDE에 종속된 설명은 생략할 예정이다. 
+
+== 스프링 부트로 시작하기
+
+https://start.spring.io/[https://start.spring.io]
+
+스프링 부트를  시작할 때 가장 먼저 접하는  사이트이다. 
+
+여기서 필요한 기술에 대해 메뉴 정하듯 선택해서 개발에 필요한 기본 형태의 파일을  다운할 수 있다.
+
+먼저 필요한 기술 메뉴를 확인해보자.
+
+image::https://t1.daumcdn.net/thumb/R1280x0/?fname=http://t1.daumcdn.net/brunch/service/user/so6/image/T2EJbxy7N3VkPWidZWVWFdFqCtw.jpg[]
+하단에서 선택된 녹색 사각형(Generate Project 버튼을 제외하고)을 살펴보자.
+Group과 Artifact부분은 기본 형태로 사용하겠다. ( 이 값이 자바 패키지 명을 결정한다. )
+
+먼저 Dependencies에서 선택한 부분을 간단하게 설명해보겠다.
+****
+Security:: http://projects.spring.io/spring-security/[Spring Security](이하 스프링 시큐리티) 사용하기 위해 필요하며 OAuth2 서버를 만들 때 필요하다.
+
+JPA:: http://projects.spring.io/spring-data-jpa/[Spring Data JPA](이하 스프링 데이터 JPA)를 스프링 부트에 맞도록 사용하기 위한 의존성을 제공하기 위해 추가하는 것으로 손쉽게 DB를 JPA로 접근하는 형태를 사용하기 위해서 추가했다.
+
+Rest Repositories:: http://projects.spring.io/spring-data-rest/[Spring Data Rest](이하 스프링 데이터 Rest)를 스프링 부트에 맞도록 쉽게 사용할 수 있는 형태 제공하는 부분이면 Rest API 서버를 쉽게 만들어 준다. ( Web을 따로 포함하지 않아도 스프링 MVC를 사용할 수 있는 의존성이 제공된다. )
+
+h2:: 샘플을 빠르게 만들 수 있도록 내장 DB를 사용하기 위해 추가한 부분으로, 추후에 Mysql 등 다른 DB로 쉽게 바꿀 수 있다.
+
+lombok:: 어노테이션을 사용해서 소스의 양을 줄어들도록 만들어 주는 라이브러리이다. 컴파일 타임에 사용되며 주로 getter, setter를 생략하는데 자주 사용된다. 처음 접한 분이라면 https://projectlombok.org/[공식 홈페이지에서] 동영상 한번 확인해보자. 
+****
+IDE에서 이클립스와 intelliJ IDEA에서는 플러그인으로 지원된다. 
+
+OAuth2 설정은 수동으로  뒷부분에서 설정한다. 
+
+자 이제 Generate Project 버튼을 눌러서 생성된 파일을 받아서 원하는 디렉터리로 압축을 풀어보자.
+
+'''
+
+== 참고
+
+OSX(Mac) 또는 Linux OS 계열로  개발할 때는 아래와 같은 터미널 명령어로도 웹에서 하는 것과 같이 쉽게 샘플 프로젝트가 추가할 수 있다. (윈도에서도 curl 설치하면 가능하다고 들었는데 테스트는 해보지 못했다.)
+[source,sh]
+----
+$ curl https://start.spring.io/starter.tgz -d dependencies=security,data-jpa,h2,data-rest,lombok -d baseDir=oauth2-server-sample | tar -xzvf - #baseDir 디렉터리에서 생성
+----
+
+== 실행
+
+만든 압축을 푼 디렉터리가 oauth2-server-sample 가정하고 설명하겠다.
+[source,sh]
+----
+$ cd oauth2-server-sample   
+$ mvn clean spring-boot:run
+----
+처음으로 실행했을 때에는 의존관계를 가진 모든 라이브러리를 다운로드하기 때문에 많은 시간이 걸린다.
+
+소스에  아무것도 건드리지 않았지만 8080 포트로 톰캣 서버가 스타트되었다.
+
+이제 OAuth2 사용을 위해 설정을 추가해 보자.
+
+
+== OAuth2 의존성 추가
+[source,sh]
+----
+$ vi pom.xml
+----
+vi 에디터(또는 IDE)를 실행시키켜서 아래와 같은 dependency를 추가해준다. 
+[source,xml]
+----
+<dependencies>  
+...  
+    <dependency>  
+        <groupId>org.springframework.security.oauth</groupId>  
+        <artifactId>spring-security-oauth2</artifactId>  
+    </dependency>  
+...  
+</dependencies>
+----
+이상으로 기본적인 의존성 설정은 끝이 났다. 
+
+NOTE: 추가적으로 설정이 필요한 부분은 그때그때 설명할 예정이다.
+
+다음 편에서는 OAuth2 서버에 앞서 기본적인 API 서버를 만들어 보겠다.
