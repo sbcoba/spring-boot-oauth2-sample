@@ -40,8 +40,18 @@ public class DemoApplication extends ResourceServerConfigurerAdapter {
 먼저 위의 설정을 OAuth2를 위한 설정과 API 서버를 위한 설정으로 각각 나누어 보자.
 [source,java]
 ----
+
 /**  
- * OAuth2 서버 설정  
+ * OAuth2 서버  
+ */  
+@Configuration  
+@EnableAuthorizationServer  
+class AuthorizationServerConfiguration {  
+...  
+}
+
+/**  
+ * API 서버 설정  
  */  
 @Configuration  
 @EnableResourceServer  
@@ -49,14 +59,6 @@ class ResourceServerConfiguration extends ResourceServerConfigurerAdapter {
 ...  
 }
 
-/**  
- * API 서버  
- */  
-@Configuration  
-@EnableAuthorizationServer  
-class AuthorizationServerConfiguration {  
-...  
-}
 ----
 한 곳에 있던 설정을 따로 두개의 클래스를 만들어서 도출시켰다.
 
@@ -65,25 +67,26 @@ class AuthorizationServerConfiguration {
 [source,java]
 ----
 /**  
- * OAuth2 서버 설정  
+ * OAuth2 서버  
  */  
 @Configuration  
-@EnableResourceServer  
-class ResourceServerConfiguration extends ResourceServerConfigurerAdapter {  
+@EnableAuthorizationServer  
+class AuthorizationServerConfiguration {  
  ...  
   @Bean  
   public TokenStore JdbcTokenStore(DataSource dataSource) {  
      return new JdbcTokenStore(dataSource);  
   }  
-}  
+}
 /**  
- * API 서버  
+ * API 서버 설정  
  */  
 @Configuration  
-@EnableAuthorizationServer  
-class AuthorizationServerConfiguration {  
-...  
-}
+@EnableResourceServer  
+class ResourceServerConfiguration extends ResourceServerConfigurerAdapter {  
+...
+}  
+
 ----
 
 그 이외에 설정은 대부분 API 서버 관련 설정이기 때문에 ResourceServerConfiguration 설정 부분으로 옮기면 된다.
