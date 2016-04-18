@@ -16,11 +16,13 @@ security:
     password: test
 
   oauth2:
+
     client:
       client-id: foo
       client-secret: bar
     authorization:
-      check-token-access: isAuthenticated()
+      token-key-access: isAuthenticated()
+
 
 logging.level:
   org.springframework:
