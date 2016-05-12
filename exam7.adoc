@@ -1,0 +1,157 @@
+== Spring Boot로 만드는 OAuth2 시스템 7
+
+==== JWT 방식으로 바꿔 보자
+
+이전 포스팅에서 OAuth2 기본 Access Token을 사용해서 사용해서 교환하여 인증받는 방식을 이야기하였다.
+
+이렇게 하는 방식에는 단점이 존재한다. Access Token만 교환하기 때문에 그 다시 토큰을 가지고 인증 정보를 조회하기 위해 OAuth2 서버로 다시 요청하여 인증된 정보를 얻어오는 오버헤드가 생기게 된다. 
+
+> 참고로 이야기하자면 API 서버에서는 인증과 관련된 정보를 가지고 있지 않기 때문에 호출시마다 Access Token을 사용해서 OAuth2 서버로 요청하여 정보를 가져온다.  
+> 나중에 사용자가 많아지고 트래픽이 늘어나게 되면 API 서버에서 적절하게 캐시를 사용해서 컨트롤해야 하는 부분도 있다. 하지만 요청한 Access Token이 유효(validation)한지 문제가 없는지 계속 확인해야 하기 때문에 OAuth2 서버에도 주기적으로 체크해줘야 한다. 이 부분을 잘 컨트롤해줘야 많은 트래픽에 견딜 수 있는 인증서버 API 서버를 만들 수 있다.
+
+그러한 부분을 어느 정도 해결해주기 위해서 나온 형태가 JWT(Json Web Token 이하 JWT) 방식이다. 
+
+JWT를 여기서 설명하자면 많이 길어지기 때문에 잘 설명되어 있는 **https://blog.outsider.ne.kr/[Outsider님의 블로그]**를 방문하여 한 번 읽어보길 바란다. (https://blog.outsider.ne.kr/1069[https://blog.outsider.ne.kr/1069], https://blog.outsider.ne.kr/1160[https://blog.outsider.ne.kr/1160] )
+
+내용을 읽어보면 알겠지만 JSON 형식의 토큰 데이터를 인코딩 하여 토큰으로 이용하는 형태라고 생각하면 될 것 같다.
+
+이전의 OAuth2 서버가 Access Token만 발급한 후 필요한 정보를 Access Token을 통해 정보를 조회하는 형태라면, JWT는 (JSON형태의) 데이터가 직접 붙어 있는 토큰을 OAuth2 서버에서 발급하는 형태이다.
+
+그래서 직접 다시 Access Token을 이용하여 조회할 필요 없이 JWT 토큰에 붙어 있는 정보를 바로 사용하게 된다.
+
+소스를 살펴보기 전에 발급된 토큰을 살펴보자.
+
+먼저 앞서 포스팅했던 기존 OAuth2 서버에서 Access Token을 발급 형태를 살펴보자.
+[source,json]
+----
+{  
+  "access_token":"6dfb79ab-46cc-49ad-9b46-b4da66e9e103",  
+  "token_type":"bearer",  
+  "expires_in":42760,  
+  "scope":"read"  
+}
+----
+위와 같이 Access Token 정보만 발급하였다.
+
+그럼 JWT토큰을 형태로 OAuth2 서버를 설정했을 때 발급한 형태를 살펴보자.
+[source,json]
+----
+{  
+  "access_token":"eyJhbGciOiJIUzI1NiJ9.eyJzY29wZSI6WyJyZWFkIl0sImV4cCI6MTQ1NzY0OTg5NiwiYXV0aG9yaXRpZXMiOlsiUk9MRV9VU0VSIl0sImp0aSI6IjY1NDI5NWJlLWQyZmEtNDkxYi1hMTQwLTU5MTY0OTIxOWM2NSIsImNsaWVudF9pZCI6ImZvbyJ9.6LH9C0EP64Nh70O6t3WIqL009VfyzfavNLQEwEILxqw",  
+  "token_type":"bearer",  
+  "expires_in":43199,  
+  "scope":"read",  
+  "jti":"654295be-d2fa-491b-a140-591649219c65"  
+}
+----
+
+위와 구조는 거의 비슷하지만 "access_token" 안에 이전보다 많은 문자열이 들어가 있는 것이 보일 것이다.
+
+이 문자열이 JWT 데이터이다. 이 데이터를 http://jwt.io/[jwt.io] 사이트에서 분석해보겠다.
+
+image::https://t1.daumcdn.net/thumb/R1280x0/?fname=http://t1.daumcdn.net/brunch/service/user/so6/image/-0z3twwNMYPdaYR4ncMz5cuPbQI.jpg[]
+
+위 문자열에서 JSON 데이터가 도출된다. ( 암호화 형태가 아니라 단순 인코딩 형태이기 때문에 바로 복호화된다. 중요한 정보를 노출하면 안 되는 이유이다. )
+
+'''
+
+이제 JWT 형태로 OAuth2 인증을 받게 하는 형태로 만들어 보자.
+
+먼저 JWT를 사용하기 위해서는 oauth2-server, api-server 의 pom.xml에서 아래와 같은 의존성을 추가해준다. 
+[source,xml]
+----
+ <!-- oauth2-server/pom.xml, api-server/pom.xml -->  
+ <dependency>  
+    <groupId>org.springframework.security</groupId>  
+    <artifactId>spring-security-jwt</artifactId>  
+ </dependency>
+----
+
+그리고 Access Token을 사용하는 방법이 바뀌었기 때문에 설정 부분도 바꿔 줘야 한다.
+
+먼저 JWT 토큰에서 서명할 때 사용하는 key 값이 필요하다. (JWT는 전송 중에 데이터가 변경되지 않았다는 서명을 가지는데 HMAC이라고 부른다.)을 그때 방법이 직접 클라이언트와 서버에 RSA (private, public) 키값을 기술해주거나 서버에서 얻어오는 방법이 있다.   
+여기서는 심플하게 서버에서 Key값을 얻어오는 방법으로 하겠다.
+[source,yaml]
+----
+# application.yml ( OAuth2 서버 )  
+security.oauth2.authorization.token-key-access: isAuthenticated()
+----
+
+위의 설정은 JWT에서 사용된 서명(HMAC) 정보를 검증할 key를 얻어오기 위한 API를 열어주기 위한 설정이다.   
+(기본은 설정은 denyAll()로 되어 있다.)  
+참고로 기본 Key 값은 OAuth2 서버가 시작할 때 랜덤으로 결정된다.  
+
+[source,yaml]
+----
+# application.yml ( API 서버 )  
+security.oauth2.jwt.key-uri: http://localhost:8080/oauth/token_key[http://localhost:8080/oauth/token_key]
+----
+위 설정은 OAuth2 서버에서 열어준 검증용 key값을 얻어오기 위해서 API의 URL을 지정해주는 부분이다. (위 주소(/oauth/token_key)는 기본값이다.)
+
+이제 소스를 살펴보자.
+
+[source,java]
+----
+// OAuth2Application.class  
+// ...  
+@Configuration  
+class JwtOAuth2AuthorizationServerConfiguration extends OAuth2AuthorizationServerConfiguration {  
+ 
+    @Override  
+    public void configure(AuthorizationServerEndpointsConfigurer endpoints) throws Exception {  
+    super.configure(endpoints);  
+    endpoints.accessTokenConverter(jwtAccessTokenConverter());  
+    }  
+ 
+    @Bean  
+    public TokenStore tokenStore() {  
+       return new JwtTokenStore(jwtAccessTokenConverter());  
+    }  
+ 
+    @Bean  
+    public JwtAccessTokenConverter jwtAccessTokenConverter() {  
+       return new JwtAccessTokenConverter();  
+    }  
+}
+----
+이전에 있던 JdbcTokenStore 설정 부분을 제거한 후 위 소스 설정을 추가해준다.
+
+간단하게 설명하면 기존 token을 DB로 저장했었던 부분이 JWT로 오면서 없어지게 된다. 
+
+위에서 한번 언급했지만 token 자체가 (JSON형태로) 정보를 가지고 있기 때문에 DB에서 읽어 오는 게 아니라 token에 붙어 있는 JSON을 해석해서 토큰 정보를 읽어 오게 된다. 그리고 저장은 Token정보를 JSON으로 바꾼 후 token형태로 발행하게 된다. 
+
+그런 부분 설정을 위해서 위와 같은 설정을 하게 되는 것이다.
+
+자 이제 Access Token을 읽어보자.
+[source,sh]
+----
+$ curl foo:bar@localhost:8080/oauth/token -d grant_type=password -d client_id=foo -d scope=read -d username=user -d password=test -v 
+----
+[source,json]
+----
+# 결과  
+{  
+  "access_token":"eyJhbGciOiJIUzI1NiJ9.eyJleHAiOjE0NjMxMDc1NjcsInVzZXJfbmFtZSI6InVzZXIiLCJhdXRob3JpdGllcyI6WyJST0xFX1VTRVIiXSwianRpIjoiZTAyNmIxNGItMDE4MS00M2U1LTkyOTItYzlhOWI0MDUyZTE4IiwiY2xpZW50X2lkIjoiZm9vIiwic2NvcGUiOlsicmVhZCJdfQ.uxYf_gC471N14t6HejhS_Nta9raXdXZ_zWp9oq4PZfw",  
+  "token_type":"bearer",  
+  "refresh_token":"eyJhbGciOiJIUzI1NiJ9.eyJ1c2VyX25hbWUiOiJ1c2VyIiwic2NvcGUiOlsicmVhZCJdLCJhdGkiOiJlMDI2YjE0Yi0wMTgxLTQzZTUtOTI5Mi1jOWE5YjQwNTJlMTgiLCJleHAiOjE0NjU2NTYzNjcsImF1dGhvcml0aWVzIjpbIlJPTEVfVVNFUiJdLCJqdGkiOiJiMzdiZDE1Ny00NDRmLTQ5ZjEtOTljYy1jYWVkYWNjZTAzZTQiLCJjbGllbnRfaWQiOiJmb28ifQ.ouV83CljkzdRMW7GBQ3EpShUwYocL2cqheF5Pb1ntP0",  
+  "expires_in":43199,  
+  "scope":"read",  
+  "jti":"e026b14b-0181-43e5-9292-c9a9b4052e18"  
+}
+----
+위 토큰을 통해서 API를 호출해보자
+[source,sh]
+----
+$ curl http://localhost:8081/members -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJleHAiOjE0NjMxMDc1NjcsInVzZXJfbmFtZSI6InVzZXIiLCJhdXRob3JpdGllcyI6WyJST0xFX1VTRVIiXSwianRpIjoiZTAyNmIxNGItMDE4MS00M2U1LTkyOTItYzlhOWI0MDUyZTE4IiwiY2xpZW50X2lkIjoiZm9vIiwic2NvcGUiOlsicmVhZCJdfQ.uxYf_gC471N14t6HejhS_Nta9raXdXZ_zWp9oq4PZfw"  
+
+# 결과  
+// API 결과 JSON  ...
+----
+API를 호출한 후 OAuth2 서버가 반응하는지 확인해보자. 내 예상이 맞다면 아마 로그가 안 올라올 것이다. 
+
+즉 토큰만으로 API를 호출할 수 있게 된 것이다.   
+( API 서버에서 Access Token을 확인하기 위한 OAuth2 서버로의 요청이 사라 졌다. token자체에서 데이타를 읽기 때문에! )
+
+전체 소스는 https://github.com/sbcoba/spring-boot-oauth2-sample[이 곳]에 있습니다.  
+
+다음화에서 계속됩니다 ~ 

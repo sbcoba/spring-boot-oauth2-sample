@@ -9,3 +9,5 @@ include::exam4.adoc[]
 include::exam5.adoc[]
 
 include::exam6.adoc[]
+
+include::exam7.adoc[]
