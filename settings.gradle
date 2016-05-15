@@ -1,0 +1,4 @@
+rootProject.name = 'demo'
+include 'oauth2-server'
+include 'api-server'
+include 'h2-server'

@@ -1,0 +1,89 @@
+//allprojects  {
+//  apply plugin: 'maven'
+//  group = 'com.example'
+//  version = '0.0.1-SNAPSHOT'
+//}
+
+buildscript {
+    ext {
+        springBootVersion = '1.3.5.RELEASE'
+    }
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath "org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}"
+        classpath "org.springframework:springloaded:1.2.4.RELEASE"
+        classpath "io.spring.gradle:dependency-management-plugin:0.5.6.RELEASE"
+
+    }
+}
+
+configure(allprojects) {
+
+  apply plugin: 'java'
+  apply plugin: 'spring-boot'
+  apply plugin: "io.spring.dependency-management"
+
+  group = 'com.example'
+  version = '0.0.1-SNAPSHOT'
+
+  sourceCompatibility = 1.8
+  targetCompatibility = 1.8
+
+  repositories {
+    mavenCentral()
+  }
+
+  dependencies {
+    compile 'org.projectlombok:lombok:1.16.6'
+    runtime 'com.h2database:h2:1.4.190'
+  }
+
+  configurations {
+      all*.exclude group: 'commons-logging', module: 'commons-logging' // replaced with jcl-over-slf4j
+      all*.exclude group: 'log4j', module: 'log4j' // replaced with log4j-over-slf4j
+  }
+}
+
+project(':oauth2-server') {
+    dependencies {
+        compile 'org.springframework.boot:spring-boot-starter-web'
+        compile 'org.springframework.boot:spring-boot-starter-jdbc'
+        compile 'org.springframework.boot:spring-boot-starter-security'
+
+        compile 'org.springframework.security.oauth:spring-security-oauth2'
+        compile 'org.springframework.security:spring-security-jwt'
+
+        testCompile 'org.springframework.boot:spring-boot-starter-test'
+    }
+}
+
+project(':api-server') {
+    dependencies {
+        compile 'org.springframework.boot:spring-boot-starter-data-jpa'
+        compile 'org.springframework.boot:spring-boot-starter-data-rest'
+        compile 'org.springframework.boot:spring-boot-starter-security'
+
+        compile 'org.springframework.security.oauth:spring-security-oauth2'
+        compile 'org.springframework.data:spring-data-rest-hal-browser'
+        compile 'org.springframework.security:spring-security-jwt'
+
+        testCompile 'org.springframework.boot:spring-boot-starter-test'
+    }
+
+}
+
+project(':h2-server') {
+    dependencies {
+        compile "org.springframework.boot:spring-boot-starter-web"
+        compile 'com.h2database:h2:1.4.190'
+    }
+}
+
+//eclipse {
+//    classpath {
+//        containers.remove "org.eclipse.jdt.launching.JRE_CONTAINER"
+//        containers 'org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.8'
+//    }
+//}
