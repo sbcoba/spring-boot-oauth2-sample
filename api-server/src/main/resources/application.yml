@@ -15,10 +15,11 @@ spring.h2.console:
 security:
   oauth2:
     client:
-      client-id: foo
-      client-secret: bar
+      client-id: my_client_id
+      client-secret: my_client_secret
     resource:
-      jwt.key-uri: http://localhost:8080/oauth/token_key
+      jwt:
+        key-value: jwt_key_test
 
 logging.level:
   org.springframework:

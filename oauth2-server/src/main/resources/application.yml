@@ -11,17 +11,12 @@ spring.h2.console:
   path: /h2-console
 
 security:
-  user:
-    name: user
-    password: test
-
   oauth2:
-
-    client:
-      client-id: foo
-      client-secret: bar
-    authorization:
-      token-key-access: isAuthenticated()
+#    authorization:
+#      token-key-access: isAuthenticated()
+    resource:
+      jwt:
+        key-value: jwt_key_test
 
 
 logging.level:
