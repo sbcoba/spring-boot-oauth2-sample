@@ -19,7 +19,9 @@ security:
       client-secret: my_client_secret
     resource:
       jwt:
+        # JWT 검증 키를 직접 문자열로 지정
         key-value: jwt_key_test
+        # jwt.key-uri: http://localhost:8080/oauth/token_key
 
 logging.level:
   org.springframework:
